@@ -10,7 +10,7 @@
 import KlaviyoSwift
 import UIKit
 
-@UIApplicationMain
+@main
 class AppDelegate: UIResponder, UIApplicationDelegate {
     // MARK: - Private members
 
@@ -37,7 +37,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         KlaviyoSDK().initialize(with: "magpcN")
 
         // EXAMPLE: of how to track an event
-        KlaviyoSDK().create(event: .init(name: .CustomEvent("Opened kLM App")))
+        KlaviyoSDK().create(event: .init(name: .customEvent("Opened kLM App")))
 
         // STEP3: register the user email with klaviyo so there is an unique way to identify your app user.
         if let email = email {
@@ -156,7 +156,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         case .checkout:
             // this is where we could present the checkout view
             break
-
         case .debug:
             // sending debug should show the deeplink URL in code
             let debugViewController = DebugViewController()

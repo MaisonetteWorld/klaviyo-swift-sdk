@@ -10,6 +10,9 @@ let package = Package(
             name: "KlaviyoSwift",
             targets: ["KlaviyoSwift"]),
         .library(
+            name: "KlaviyoUI",
+            targets: ["KlaviyoUI"]),
+        .library(
             name: "KlaviyoSwiftExtension",
             targets: ["KlaviyoSwiftExtension"])
     ],
@@ -24,14 +27,22 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "KlaviyoSwift",
+            name: "KlaviyoCore",
             dependencies: [.product(name: "AnyCodable", package: "AnyCodable")],
+            path: "Sources/KlaviyoCore"),
+        .testTarget(
+            name: "KlaviyoCoreTests",
+            dependencies: [
+                "KlaviyoCore",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+                .product(name: "CustomDump", package: "swift-custom-dump"),
+                .product(name: "CasePaths", package: "swift-case-paths")
+            ]),
+        .target(
+            name: "KlaviyoSwift",
+            dependencies: [.product(name: "AnyCodable", package: "AnyCodable"), "KlaviyoCore"],
             path: "Sources/KlaviyoSwift",
             resources: [.copy("PrivacyInfo.xcprivacy")]),
-        .target(
-            name: "KlaviyoSwiftExtension",
-            dependencies: [],
-            path: "Sources/KlaviyoSwiftExtension"),
         .testTarget(
             name: "KlaviyoSwiftTests",
             dependencies: [
@@ -39,9 +50,25 @@ let package = Package(
                 .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
                 .product(name: "CasePaths", package: "swift-case-paths"),
-                .product(name: "CombineSchedulers", package: "combine-schedulers")
+                .product(name: "CombineSchedulers", package: "combine-schedulers"),
+                "KlaviyoCore"
             ],
             exclude: [
                 "__Snapshots__"
-            ])
+            ]),
+        .target(
+            name: "KlaviyoUI",
+            dependencies: ["KlaviyoSwift"],
+            path: "Sources/KlaviyoUI",
+            resources: [.process("KlaviyoWebView/Resources")]),
+        .testTarget(
+            name: "KlaviyoUITests",
+            dependencies: [
+                "KlaviyoSwift",
+                "KlaviyoCore"
+            ]),
+        .target(
+            name: "KlaviyoSwiftExtension",
+            dependencies: [],
+            path: "Sources/KlaviyoSwiftExtension")
     ])

@@ -7,12 +7,14 @@
 
 @testable import KlaviyoSwift
 import Foundation
+import KlaviyoCore
 import XCTest
 
 class StateManagementEdgeCaseTests: XCTestCase {
     @MainActor
     override func setUp() async throws {
         environment = KlaviyoEnvironment.test()
+        klaviyoSwiftEnvironment = KlaviyoSwiftEnvironment.test()
     }
 
     // MARK: - initialization
@@ -111,6 +113,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
         }
         await store.receive(.start)
         await store.receive(.flushQueue)
+        await store.receive(.setPushEnablement(PushEnablement.authorized))
     }
 
     // MARK: - Set Email
@@ -124,7 +127,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
         }
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -171,7 +174,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testSetExternalIdUninitializedDoesNotAddToPendingRequest() async throws {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -216,7 +219,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testSetPhoneNumberUninitializedDoesNotAddToPendingRequest() async throws {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -228,7 +231,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
 
     @MainActor
     func testSetPhoneNumberMissingApiKeyStillSetsPhoneNumber() async throws {
-        let initialState = KlaviyoState(anonymousId: environment.analytics.uuid().uuidString,
+        let initialState = KlaviyoState(anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .initialized,
@@ -260,7 +263,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testSetPushTokenUninitializedDoesNotAddToPendingRequest() async throws {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -292,7 +295,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testStopUninitialized() async {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -306,7 +309,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testStopInitializing() async {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .initializing,
@@ -322,7 +325,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testStartUninitialized() async {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -338,7 +341,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     func testNetworkStatusChangedUninitialized() async {
         let apiKey = "fake-key"
         let initialState = KlaviyoState(apiKey: apiKey,
-                                        anonymousId: environment.analytics.uuid().uuidString,
+                                        anonymousId: environment.uuid().uuidString,
                                         queue: [],
                                         requestsInFlight: [],
                                         initalizationState: .uninitialized,
@@ -353,7 +356,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     @MainActor
     func testTokenRequestMissingApiKey() async {
         let initialState = KlaviyoState(
-            anonymousId: environment.analytics.uuid().uuidString,
+            anonymousId: environment.uuid().uuidString,
             queue: [],
             requestsInFlight: [],
             initalizationState: .initialized,
@@ -371,7 +374,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
     @MainActor
     func testOpenedPushEventUninitializedAddsToPendingRequests() async throws {
         let store = TestStore(initialState: .init(queue: []), reducer: KlaviyoReducer())
-        let event = Event(name: .OpenedPush)
+        let event = Event(name: ._openedPush)
         _ = await store.send(.enqueueEvent(event)) {
             $0.pendingRequests = [.event(event)]
         }
@@ -386,7 +389,7 @@ class StateManagementEdgeCaseTests: XCTestCase {
         }
         let store = TestStore(initialState: .init(queue: []), reducer: KlaviyoReducer())
 
-        let nonOpenedPushEvents = Event.EventName.allCases.filter { $0 != .OpenedPush }
+        let nonOpenedPushEvents = Event.EventName.allCases.filter { $0 != ._openedPush }
 
         for event in nonOpenedPushEvents {
             let event = Event(name: event)
@@ -415,13 +418,13 @@ class StateManagementEdgeCaseTests: XCTestCase {
         let initialState = KlaviyoState(
             apiKey: TEST_API_KEY,
             email: "foo@bar.com",
-            anonymousId: environment.analytics.uuid().uuidString,
+            anonymousId: environment.uuid().uuidString,
             phoneNumber: "99999999",
             externalId: "12345",
             pushTokenData: .init(pushToken: "blob_token",
                                  pushEnablement: .authorized,
                                  pushBackground: .available,
-                                 deviceData: .init(context: environment.analytics.appContextInfo())),
+                                 deviceData: .init(context: environment.appContextInfo())),
             queue: [],
             requestsInFlight: [],
             initalizationState: .initialized,
@@ -441,6 +444,6 @@ class StateManagementEdgeCaseTests: XCTestCase {
 
 extension Event.EventName: CaseIterable {
     public static var allCases: [KlaviyoSwift.Event.EventName] {
-        [.OpenedPush, .OpenedAppMetric, .ViewedProductMetric, .AddedToCartMetric, .StartedCheckoutMetric, .CustomEvent("someEvent")]
+        [._openedPush, .openedAppMetric, .viewedProductMetric, .addedToCartMetric, .startedCheckoutMetric, .customEvent("someEvent")]
     }
 }

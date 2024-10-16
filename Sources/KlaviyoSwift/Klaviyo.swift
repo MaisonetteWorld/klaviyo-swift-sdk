@@ -7,12 +7,13 @@
 
 import AnyCodable
 import Foundation
+import KlaviyoCore
 import UIKit
 
 func dispatchOnMainThread(action: KlaviyoAction) {
     Task {
         await MainActor.run {
-            environment.analytics.send(action)
+            klaviyoSwiftEnvironment.send(action)
         }
     }
 }
@@ -31,7 +32,7 @@ public struct KlaviyoSDK {
     public init() {}
 
     private var state: KlaviyoState {
-        environment.analytics.state()
+        klaviyoSwiftEnvironment.state()
     }
 
     /// Returns the email for the current user, if any.
@@ -142,10 +143,9 @@ public struct KlaviyoSDK {
     /// Set the current user's push token. This will be associated with profile and can be used to send them push notificaitons.
     /// - Parameter pushToken: String formatted push token.
     public func set(pushToken: String) {
-        environment.getNotificationSettings { enablement in
-            dispatchOnMainThread(action: .setPushToken(
-                pushToken,
-                enablement))
+        Task {
+            let enablement = await environment.getNotificationSettings()
+            dispatchOnMainThread(action: .setPushToken(pushToken, enablement))
         }
     }
 
@@ -158,7 +158,7 @@ public struct KlaviyoSDK {
     public func handle(notificationResponse: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void, deepLinkHandler: ((URL) -> Void)? = nil) -> Bool {
         if let properties = notificationResponse.notification.request.content.userInfo as? [String: Any],
            let body = properties["body"] as? [String: Any], let _ = body["_k"] {
-            create(event: Event(name: .OpenedPush, properties: properties))
+            create(event: Event(name: ._openedPush, properties: properties))
             Task {
                 await MainActor.run {
                     if let url = properties["url"] as? String, let url = URL(string: url) {
