@@ -9,16 +9,32 @@ import Combine
 import UIKit
 import WebKit
 
-class KlaviyoWebViewController: UIViewController, WKUIDelegate {
-    var webView: WKWebView!
-    private let viewModel: KlaviyoWebViewModeling
-    private var cancellables = Set<AnyCancellable>()
+private func createDefaultWebView() -> WKWebView {
+    let config = WKWebViewConfiguration()
+    let webView = WKWebView(frame: .zero, configuration: config)
+    webView.isOpaque = false
+    webView.scrollView.contentInsetAdjustmentBehavior = .never
+    return webView
+}
+
+class KlaviyoWebViewController: UIViewController, WKUIDelegate, KlaviyoWebViewDelegate {
+    private lazy var webView: WKWebView = {
+        let webView = createWebView()
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+        return webView
+    }()
+
+    private var viewModel: KlaviyoWebViewModeling
+    private let createWebView: () -> WKWebView
 
     // MARK: - Initializers
 
-    init(viewModel: KlaviyoWebViewModeling) {
+    init(viewModel: KlaviyoWebViewModeling, webViewFactory: @escaping () -> WKWebView = createDefaultWebView) {
         self.viewModel = viewModel
+        createWebView = webViewFactory
         super.init(nibName: nil, bundle: nil)
+        self.viewModel.delegate = self
     }
 
     @available(*, unavailable)
@@ -29,45 +45,51 @@ class KlaviyoWebViewController: UIViewController, WKUIDelegate {
     // MARK: - View loading
 
     override func loadView() {
-        super.loadView()
-
-        let config = createWebViewConfiguration()
-        webView = createWebView(with: config)
-        webView.navigationDelegate = self
-        webView.uiDelegate = self
-
+        view = UIView()
         view.addSubview(webView)
 
-        configureLoadScripts()
-        configureScriptEvaluator()
         configureSubviewConstraints()
     }
 
     override func viewDidLoad() {
+        super.viewDidLoad()
+
+        guard !webView.isLoading,
+              webView.estimatedProgress != 1.0 else { return }
+
+        loadUrl()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+
+        let scriptNames = viewModel.loadScripts?.keys.compactMap { $0 } ?? []
+        for scriptName in scriptNames {
+            webView.configuration.userContentController.removeScriptMessageHandler(forName: scriptName)
+        }
+    }
+
+    @MainActor
+    private func loadUrl() {
+        configureLoadScripts()
         let request = URLRequest(url: viewModel.url)
         webView.load(request)
     }
 
-    // MARK: - WKWebView configuration
-
-    func createWebViewConfiguration() -> WKWebViewConfiguration {
-        let config = WKWebViewConfiguration()
-        // customize any WKWebViewConfiguration properties here
-        // ex: config.allowsInlineMediaPlayback = true
-        return config
+    @MainActor
+    func preloadUrl() {
+        loadUrl()
     }
 
-    func createWebView(with config: WKWebViewConfiguration) -> WKWebView {
-        let webView = WKWebView(frame: .zero, configuration: config)
-        // customize any WKWebView behaviors here
-        // ex: webView.allowsBackForwardNavigationGestures = true
-        return webView
+    @MainActor
+    func dismiss() {
+        dismiss(animated: true)
     }
 
     // MARK: - Scripts
 
     /// Configures the scripts to be injected into the website when the website loads.
-    func configureLoadScripts() {
+    private func configureLoadScripts() {
         guard let scriptsDict = viewModel.loadScripts else { return }
 
         for (name, script) in scriptsDict {
@@ -76,22 +98,14 @@ class KlaviyoWebViewController: UIViewController, WKUIDelegate {
         }
     }
 
-    func configureScriptEvaluator() {
-        viewModel.scriptSubject.sink { [weak self] script, callback in
-            Task { [weak self] in
-                do {
-                    let result = try await self?.webView.evaluateJavaScript(script)
-                    callback?(.success(result))
-                } catch {
-                    callback?(.failure(error))
-                }
-            }
-        }.store(in: &cancellables)
+    @MainActor
+    func evaluateJavaScript(_ script: String) async throws -> Any {
+        try await webView.evaluateJavaScript(script)
     }
 
     // MARK: - Layout
 
-    func configureSubviewConstraints() {
+    private func configureSubviewConstraints() {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.leadingAnchor.constraint(equalTo: view.leadingAnchor).isActive = true
         webView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
@@ -126,11 +140,49 @@ extension KlaviyoWebViewController: WKScriptMessageHandler {
 
 // MARK: - Previews
 
+#if DEBUG
+func createKlaviyoWebPreview(viewModel: KlaviyoWebViewModeling) -> UIViewController {
+    let viewController = KlaviyoWebViewController(viewModel: viewModel)
+
+    // Add a dummy view as a parent to the KlaviyoWebViewController to preview what the
+    // KlaviyoWebViewController might look like when it's displayed on top of a view in an app.
+    let parentViewController = PreviewTabViewController()
+
+    parentViewController.addChild(viewController)
+    parentViewController.view.addSubview(viewController.view)
+    viewController.didMove(toParent: parentViewController)
+
+    viewController.view.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+        viewController.view.topAnchor.constraint(equalTo: parentViewController.view.topAnchor),
+        viewController.view.bottomAnchor.constraint(equalTo: parentViewController.view.bottomAnchor),
+        viewController.view.leadingAnchor.constraint(equalTo: parentViewController.view.leadingAnchor),
+        viewController.view.trailingAnchor.constraint(equalTo: parentViewController.view.trailingAnchor)
+    ])
+
+    return parentViewController
+}
+#endif
+
 #if swift(>=5.9)
 @available(iOS 17.0, *)
 #Preview("Klaviyo.com") {
-    let url = URL(string: "https://www.klaviyo.com")!
+    let url = URL(string: "https://picsum.photos/200/300")!
     let viewModel = KlaviyoWebViewModel(url: url)
+    return createKlaviyoWebPreview(viewModel: viewModel)
+}
+
+@available(iOS 17.0, *)
+#Preview("Klaviyo Form") {
+    let indexHtmlFileUrl = try! ResourceLoader.getResourceUrl(path: "klaviyo", type: "html")
+    let viewModel = KlaviyoWebViewModel(url: indexHtmlFileUrl)
+    return createKlaviyoWebPreview(viewModel: viewModel)
+}
+
+@available(iOS 17.0, *)
+#Preview("JS Test Page") {
+    let indexHtmlFileUrl = try! ResourceLoader.getResourceUrl(path: "jstest", type: "html")
+    let viewModel = JSTestWebViewModel(url: indexHtmlFileUrl)
     return KlaviyoWebViewController(viewModel: viewModel)
 }
 #endif

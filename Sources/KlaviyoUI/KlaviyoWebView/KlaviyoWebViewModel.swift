@@ -9,14 +9,27 @@ import Combine
 import Foundation
 import WebKit
 
-class KlaviyoWebViewModel: KlaviyoWebViewModeling {
-    let url: URL
-    let loadScripts: [String: WKUserScript]?
+@_spi(KlaviyoPrivate)
+public protocol KlaviyoWebViewDelegate: AnyObject {
+    @MainActor
+    func preloadUrl()
 
-    /// Publishes scripts for the `WKWebView` to execute.
-    let scriptSubject = PassthroughSubject<(script: String, callback: ((Result<Any?, Error>) -> Void)?), Never>()
+    @MainActor
+    func evaluateJavaScript(_ script: String) async throws -> Any
 
-    init(url: URL) {
+    @MainActor
+    func dismiss()
+}
+
+@_spi(KlaviyoPrivate)
+public class KlaviyoWebViewModel: KlaviyoWebViewModeling {
+    public let url: URL
+    public let loadScripts: [String: WKUserScript]?
+    public weak var delegate: KlaviyoWebViewDelegate?
+
+    public let (navEventStream, navEventContinuation) = AsyncStream.makeStream(of: WKNavigationEvent.self)
+
+    public init(url: URL) {
         self.url = url
         loadScripts = KlaviyoWebViewModel.initializeLoadScripts()
     }
@@ -24,18 +37,24 @@ class KlaviyoWebViewModel: KlaviyoWebViewModeling {
     private static func initializeLoadScripts() -> [String: WKUserScript] {
         var scripts: [String: WKUserScript] = [:]
 
-        // TODO: initialize scripts
+        if let closeHandlerScript = try? ResourceLoader.getResourceContents(path: "closeHandler", type: "js") {
+            let script = WKUserScript(source: closeHandlerScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            scripts["closeHandler"] = script
+        }
 
         return scripts
     }
 
     // MARK: handle WKWebView events
 
-    func handleNavigationEvent(_ event: WKNavigationEvent) {
-        // TODO: handle navigation events
-    }
+    public func handleScriptMessage(_ message: WKScriptMessage) {
+        if message.name == "closeHandler" {
+            // TODO: handle close button tap
+            print("user tapped close button")
 
-    func handleScriptMessage(_ message: WKScriptMessage) {
-        // TODO: handle script message
+            Task {
+                await delegate?.dismiss()
+            }
+        }
     }
 }

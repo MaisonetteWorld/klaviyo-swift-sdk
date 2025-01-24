@@ -28,14 +28,14 @@ public struct NetworkSession {
         self.data = data
     }
 
-    fileprivate static let currentApiRevision = "2023-07-15"
+    fileprivate static let currentApiRevision = "2024-10-15"
     fileprivate static let applicationJson = "application/json"
     fileprivate static let acceptedEncodings = ["br", "gzip", "deflate"]
     fileprivate static let mobileHeader = "1"
 
     public static let defaultUserAgent = { () -> String in
         let appContext = environment.appContextInfo()
-        let klaivyoSDKVersion = "klaviyo-ios/\(environment.sdkVersion())"
+        let klaivyoSDKVersion = "klaviyo-\(environment.sdkName())/\(environment.sdkVersion())"
         return "\(appContext.executable)/\(appContext.appVersion) (\(appContext.bundleId); build:\(appContext.appBuild); \(appContext.osVersionName)) \(klaivyoSDKVersion)"
     }()
 
